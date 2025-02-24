@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Voice Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 flex items-center justify-center min-h-screen">
+
+    <div class="max-w-md w-full bg-gray-800 text-white rounded-lg shadow-lg p-6 relative">
+        <!-- Circular AI Assistant Image -->
+        <div class="flex justify-center">
+            <img src="https://img.freepik.com/premium-photo/virtual-assistant-voice-recognition-service-technology_587448-5706.jpg"
+                 alt="AI Assistant" class="w-32 h-32 rounded-full shadow-md border-4 border-green-500">
+        </div>
+
+        <h2 class="text-center text-xl font-semibold mt-4 text-gray-300">AI Voice Assistant</h2>
+
+        <!-- Chat Messages -->
+        <div id="chatBox" class="mt-4 space-y-3 h-64 overflow-y-auto p-2 border rounded-md bg-gray-700">
+            <div class="assistant-message flex items-center space-x-2">
+                <div class="bg-green-500 text-white p-3 rounded-lg shadow">
+                    Hello! How can I assist you today?
+                </div>
+            </div>
+        </div>
+
+        <!-- Voice Input Button -->
+        <div class="flex justify-center mt-6">
+            <button id="voiceButton" class="bg-green-500 text-white p-3 rounded-full shadow-lg hover:bg-green-600 focus:outline-none">
+                <img src="https://img.icons8.com/ios-glyphs/90/ffffff/microphone.png" class="w-6">
+            </button>
+        </div>
+
+        <!-- Loader (Hidden by default) -->
+        <div id="loader" class="text-center mt-4 hidden">
+            <span class="text-gray-400">Listening...</span>
+        </div>
+    </div>
+    <script>
+        const voiceButton = document.getElementById("voiceButton");
+        const chatBox = document.getElementById("chatBox");
+        const loader = document.getElementById("loader");
+    
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.lang = "en-US";
+    
+        function addMessage(text, sender, isStreaming = false) {
+            const messageDiv = document.createElement("div");
+            messageDiv.classList.add("flex", "items-center", "space-x-2", "mt-2");
+    
+            if (sender === "user") {
+                messageDiv.classList.add("justify-end");
+                messageDiv.innerHTML = `<div class="bg-gray-500 text-white p-3 rounded-lg shadow">${text}</div>`;
+            } else {
+                messageDiv.innerHTML = `<div class="bg-green-500 text-white p-3 rounded-lg shadow typing-effect">${isStreaming ? "..." : text}</div>`;
+            }
+    
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return messageDiv;
+        }
+    
+        function speakResponse(text) {
+            const synth = window.speechSynthesis;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = "en-US";
+            synth.speak(utterance);
+        }
+    
+        voiceButton.addEventListener("click", () => {
+            loader.classList.remove("hidden");
+            recognition.start();
+        });
+    
+        recognition.onresult = async (event) => {
+            const spokenText = event.results[0][0].transcript;
+            loader.classList.remove("hidden");
+    
+            addMessage(spokenText, "user");
+    
+            // Stream response from Flask backend
+            try {
+                const response = await fetch("http://127.0.0.1:5000/process_voice", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: spokenText }),
+                });
+    
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullResponse = "";
+                const messageDiv = addMessage("", "assistant", true);
+    
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+    
+                    const chunk = decoder.decode(value, { stream: true });
+                    fullResponse += chunk;
+                    messageDiv.innerHTML = `<div class="bg-green-500 text-white p-3 rounded-lg shadow">${fullResponse}</div>`;
+                }
+    
+                speakResponse(fullResponse);
+            } catch (error) {
+                addMessage("Error communicating with assistant.", "assistant");
+            } finally {
+                loader.classList.add("hidden");
+            }
+        };
+    
+        recognition.onerror = () => {
+            loader.classList.add("hidden");
+            addMessage("Error recognizing speech. Please try again.", "assistant");
+        };
+    </script>
+    
+</body>
+</html>
