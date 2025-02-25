@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-#from nltk.tokenize import word_tokenize
+import logging
 from gmail import *
 from apl import *
 from system_operation import *
@@ -15,20 +15,27 @@ from database import *
 # Suppress TensorFlow warnings
 tf.get_logger().setLevel("ERROR")
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Load trained intent classification model
-model = tf.keras.models.load_model("../voice/modell/intent_model.h5")
+model = tf.keras.models.load_model("intent_model.h5")
 
 # Load tokenizer and label encoder
-with open("../voice/modell/tokenizer.pkl", "rb") as f:
+with open("tokenizer.pkl", "rb") as f:
     tokenizer = pickle.load(f)
-with open("../voice/modell/label_encoder.pkl", "rb") as f:
+with open("label_encoder.pkl", "rb") as f:
     label_encoder = pickle.load(f)
+with open("max_length.pkl", "rb") as f:
+    max_length = pickle.load(f)  # Ensure consistent input shape
 
 # Initialize speech recognition and text-to-speech
 recognizer = sr.Recognizer()
 engine = pyttsx3.init()
 engine.setProperty("rate", 185)
 
+# Initialize system operations
 sys_ops = SystemTasks()
 tab_ops = TabOpt()
 win_ops = WindowOpt()
@@ -39,8 +46,8 @@ def speak(text):
     try:
         engine.say(text)
         engine.runAndWait()
-    except (KeyboardInterrupt, RuntimeError):
-        return
+    except (KeyboardInterrupt, RuntimeError) as e:
+        logger.error(f"Error in text-to-speech: {e}")
 
 def record():
     """Record and recognize user speech."""
@@ -48,14 +55,20 @@ def record():
         recognizer.adjust_for_ambient_noise(mic)
         recognizer.dynamic_energy_threshold = True
         print("Listening...")
-        audio = recognizer.listen(mic)
         try:
+            audio = recognizer.listen(mic, timeout=5)
             text = recognizer.recognize_google(audio, language="en-US").lower()
+            print("USER ->", text)
+            return text
         except sr.UnknownValueError:
+            logger.warning("Could not understand audio.")
             return None
-    print("USER ->", text)
-    return text
-
+        except sr.RequestError as e:
+            logger.error(f"Speech recognition error: {e}")
+            return None
+        except sr.WaitTimeoutError:
+            logger.warning("Listening timed out.")
+            return None
 
 def listen_audio():
     """Continuously listen for audio commands."""
@@ -65,146 +78,84 @@ def listen_audio():
             if response:
                 main(response)
     except KeyboardInterrupt:
+        logger.info("Exiting...")
         return
 
 def predict_intent(text):
     """Predict user intent using the trained deep learning model."""
-    sequence = tokenizer.texts_to_sequences([text.lower()])
-    padded_sequence = pad_sequences(sequence, maxlen=10, padding="post")
-    prediction = model.predict(padded_sequence)
-    predicted_label = label_encoder.inverse_transform([np.argmax(prediction)])
-    return predicted_label[0]
+    try:
+        sequence = tokenizer.texts_to_sequences([text.lower()])
+        padded_sequence = pad_sequences(sequence, maxlen=max_length, padding="post")
+        prediction = model.predict(padded_sequence)
+        predicted_label = label_encoder.inverse_transform([np.argmax(prediction)])
+        return predicted_label[0]
+    except Exception as e:
+        logger.error(f"Error predicting intent: {e}")
+        return None
+
+def handle_email():
+    """Handle email-related tasks."""
+    speak("Please say the recipient's email address.")
+    receiver_id = sanitize_email(record())
+
+    while not receiver_id:
+        speak("Invalid email address. Please say it again.")
+        receiver_id = sanitize_email(record())
+
+    speak("Say the subject of the email.")
+    subject = record() or "No Subject"
+
+    speak("Say the body of the email.")
+    body = record() or "No Content"
+
+    if send_email(receiver_id, subject, body):
+        speak("Your email has been sent successfully.")
+    else:
+        speak("There was an error sending the email.")
 
 def main(query):
-    intent = predict_intent(query)  # Classify user intent
-    done = False
-    if intent == "greeting":
-        speak("Hello! How can I assist you today?")
-        done = True
-
-    elif intent == "search_google":
-        googleSearch(query)
-        speak("Here are the results I found on Google.")
-        done = True
-
-    elif intent == "search_youtube":
-        youtube(query)
-        speak("Here are the results from YouTube.")
-        done = True
-
-    elif intent == "joke":
-        joke = get_joke()
-        if joke:
-            speak(joke)
-            done = True
-
-    elif intent == "news":
-        news = get_new()
-        if news:
-            speak(news)
-            done = True
-    
-    elif intent == "ip" and "ip" in query: 
-            ip = get_ip() 
-            if ip: 
-                speak(ip) 
-                done = True
-
-    elif intent == "get_time":
-        current_time = datetime.datetime.now().strftime("%I:%M %p")
-        speak(f"The time is {current_time}")
-        done = True
-
-    elif intent == "get_date":
-        current_date = datetime.datetime.now().strftime("%d %B, %Y")
-        speak(f"Today's date is {current_date}")
-        done = True
-
-    elif intent == "get_datetime":
-        current_datetime = datetime.datetime.now().strftime("%A, %d %B %Y, %I:%M %p")
-        speak(f"The current date and time is {current_datetime}")
-        done = True
-
-    elif intent == "weather":
-        weather = get_weather()
-        speak(f"The weather is: {weather}")
-        done = True
-
-    elif intent == "open_website":
-        completed = open_specified_website(query)
-        if completed:
-            speak("Opening the website.")
-            done = True
-
-    elif intent == "email":
-        speak("Please say the recipient's email address.")
-        receiver_id = record()
-        while not check_email(receiver_id):
-            speak("Invalid email address. Please say it again.")
-            receiver_id = record()
-        
-        speak("Say the subject of the email.")
-        subject = record()
-        
-        speak("Say the body of the email.")
-        body = record()
-        
-        success = send_email(receiver_id, subject, body)
-        if success:
-            speak("Your email has been sent successfully.")
-        else:
-            speak("There was an error sending the email.")
-        done = True
-
-    elif intent == "select_text" in query:
-        sys_ops.select()
-        speak("The text has been selected.")
-        done = True
-    elif intent == "copy_text" in query:
-        sys_ops.copy()
-        speak("The text has been copied.")
-        done = True
-    elif intent == "paste_text" in query:
-        sys_ops.paste()
-        speak("The text has been pasted.")
-        done = True
-    elif intent == "get_data" and "history" in query:
-        get_data()
-        done = True
-    elif intent == "exit":
-        speak("Thank you! Goodbye.")
-        exit(0)
-    
-
-    if not done:
-        answer = tell_me_about(query)
-        if answer:
-            speak(answer)
-        else:
-            speak("Sorry, I am not able to answer your query.")
-
-    return
-
-'''from flask import Flask, request, jsonify
-from flask_cors import CORS
-
-app = Flask(__name__)
-CORS(app)  # Allow frontend requests
-
-@app.route("/process_voice", methods=["POST"])
-def process_voice():
-    data = request.get_json()
-    query = data.get("query")
-
+    """Process the user's command and execute the corresponding action."""
     if not query:
-        return jsonify({"response": "I didn't hear anything. Please try again."})
+        speak("I didn't catch that. Please repeat.")
+        return "No input detected."
 
-    response_text = main(query)  # Ensure `main()` returns a response
-    return jsonify({"response": response_text})
+    intent = predict_intent(query)
+    if not intent:
+        speak("Sorry, I couldn't understand your intent.")
+        return "Intent prediction failed."
 
-if __name__ == "__main__":
-    app.run(debug=True)
-'''
+    intent_actions = {
+        "greeting": lambda: speak("Hello! How can I assist you today?"),
+        "search_google": lambda: (googleSearch(query), speak("Here are the results I found on Google.")),
+        "search_youtube": lambda: (youtube(query), speak("Here are the results from YouTube.")),
+        "joke": lambda: speak(get_joke() or "Sorry, I couldn't find a joke right now."),
+        "news": lambda: speak(get_new() or "I'm unable to fetch news at the moment."),
+        "ip": lambda: speak(get_ip() or "Couldn't retrieve IP address."),
+        "get_time": lambda: speak(f"The time is {datetime.datetime.now().strftime('%I:%M %p')}"),
+        "get_date": lambda: speak(f"Today's date is {datetime.datetime.now().strftime('%d %B, %Y')}"),
+        "get_datetime": lambda: speak(f"The current date and time is {datetime.datetime.now().strftime('%A, %d %B %Y, %I:%M %p')}"),
+        "weather": lambda: speak(f"The weather is: {get_weather()}"),
+        "open_website": lambda: speak("Opening the website.") if open_specified_website(query) else speak("Unable to open website."),
+        "select_text": lambda: (sys_ops.select(), speak("The text has been selected.")),
+        "copy_text": lambda: (sys_ops.copy(), speak("The text has been copied.")),
+        "paste_text": lambda: (sys_ops.paste(), speak("The text has been pasted.")),
+        "get_data": lambda: get_data() if "history" in query else speak("I couldn't fetch the requested data."),
+        "exit": lambda: (speak("Thank you! Goodbye."), exit(0)),
+        "email": handle_email,
+    }
+
+    if intent in intent_actions:
+        intent_actions[intent]()
+        return "Intent executed successfully."
+
+    # Default response if intent is not matched
+    answer = tell_me_about(query)
+    if answer:
+        speak(answer)
+        return answer
+    else:
+        speak("Sorry, I am not able to answer your query.")
+        return "No answer found."
 
 if __name__ == "__main__":
     listen_audio()

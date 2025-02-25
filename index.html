@@ -3,24 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Voice Assistant</title>
+    <title>Virtual Voice Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-900 flex items-center justify-center min-h-screen">
+    <style>
+        /* Custom fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500&family=Roboto+Mono:wght@400;500&display=swap');
 
-    <div class="max-w-md w-full bg-gray-800 text-white rounded-lg shadow-lg p-6 relative">
-        <!-- Circular AI Assistant Image -->
+        body {
+            background: radial-gradient(circle at center, #0f172a, #020617);
+            font-family: 'Roboto Mono', monospace;
+            color: #ffffff;
+        }
+
+        .assistant-container {
+            background: rgba(30, 30, 30, 0.8);
+            border: 2px solid #4ade80;
+            box-shadow: 0px 0px 20px #4ade80;
+            backdrop-filter: blur(10px);
+        }
+
+        .chat-bubble {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .glow {
+            text-shadow: 0 0 10px #4ade80;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Animated Mic Button */
+        .mic-button {
+            animation: pulse 1.5s infinite;
+            background: linear-gradient(145deg, #4ade80, #22c55e);
+            border: none;
+            transition: transform 0.2s ease;
+        }
+
+        .mic-button:hover {
+            transform: scale(1.1);
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 10px #4ade80; }
+            50% { box-shadow: 0 0 25px #4ade80; }
+            100% { box-shadow: 0 0 10px #4ade80; }
+        }
+
+        /* Wave animation for AI response */
+        .wave {
+            display: flex;
+            gap: 3px;
+        }
+
+        .wave span {
+            display: block;
+            width: 5px;
+            height: 10px;
+            background: #4ade80;
+            animation: waveAnim 1.2s infinite ease-in-out;
+        }
+
+        .wave span:nth-child(2) { animation-delay: 0.2s; }
+        .wave span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes waveAnim {
+            0%, 100% { height: 10px; }
+            50% { height: 20px; }
+        }
+
+        /* 3D Avatar */
+        .avatar {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: 4px solid #4ade80;
+            box-shadow: 0 0 20px #4ade80;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* Typing effect */
+        .typing-effect::after {
+            content: "";
+            display: inline-block;
+            width: 5px;
+            height: 20px;
+            background: #4ade80;
+            margin-left: 5px;
+            animation: blink 0.8s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="assistant-container max-w-md w-full rounded-xl p-6 text-white relative">
+        <!-- 3D Avatar -->
         <div class="flex justify-center">
-            <img src="https://img.freepik.com/premium-photo/virtual-assistant-voice-recognition-service-technology_587448-5706.jpg"
-                 alt="AI Assistant" class="w-32 h-32 rounded-full shadow-md border-4 border-green-500">
+            <img src="https://img.freepik.com/premium-vector/3d-robot-avatar-chatbot-ai-voice-assistant_568837-1066.jpg"
+                 alt="AI Assistant" class="avatar">
         </div>
 
-        <h2 class="text-center text-xl font-semibold mt-4 text-gray-300">AI Voice Assistant</h2>
+        <h2 class="text-center text-xl font-semibold mt-4 glow">Virtual Voice Assistant</h2>
 
         <!-- Chat Messages -->
-        <div id="chatBox" class="mt-4 space-y-3 h-64 overflow-y-auto p-2 border rounded-md bg-gray-700">
+        <div id="chatBox" class="mt-4 space-y-3 h-64 overflow-y-auto p-3 border rounded-md bg-gray-900">
             <div class="assistant-message flex items-center space-x-2">
-                <div class="bg-green-500 text-white p-3 rounded-lg shadow">
+                <div class="chat-bubble bg-green-500 text-white p-3 rounded-lg shadow">
                     Hello! How can I assist you today?
                 </div>
             </div>
@@ -28,60 +129,64 @@
 
         <!-- Voice Input Button -->
         <div class="flex justify-center mt-6">
-            <button id="voiceButton" class="bg-green-500 text-white p-3 rounded-full shadow-lg hover:bg-green-600 focus:outline-none">
+            <button id="voiceButton" class="mic-button p-4 rounded-full shadow-lg focus:outline-none">
                 <img src="https://img.icons8.com/ios-glyphs/90/ffffff/microphone.png" class="w-6">
             </button>
         </div>
 
         <!-- Loader (Hidden by default) -->
         <div id="loader" class="text-center mt-4 hidden">
+            <div class="wave">
+                <span></span><span></span><span></span>
+            </div>
             <span class="text-gray-400">Listening...</span>
         </div>
     </div>
+
     <script>
         const voiceButton = document.getElementById("voiceButton");
         const chatBox = document.getElementById("chatBox");
         const loader = document.getElementById("loader");
-    
+
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.continuous = false;
         recognition.lang = "en-US";
-    
+
         function addMessage(text, sender, isStreaming = false) {
             const messageDiv = document.createElement("div");
             messageDiv.classList.add("flex", "items-center", "space-x-2", "mt-2");
-    
+
             if (sender === "user") {
                 messageDiv.classList.add("justify-end");
-                messageDiv.innerHTML = `<div class="bg-gray-500 text-white p-3 rounded-lg shadow">${text}</div>`;
+                messageDiv.innerHTML = `<div class="chat-bubble bg-gray-700 text-white p-3 rounded-lg shadow">${text}</div>`;
             } else {
-                messageDiv.innerHTML = `<div class="bg-green-500 text-white p-3 rounded-lg shadow typing-effect">${isStreaming ? "..." : text}</div>`;
+                messageDiv.innerHTML = `<div class="chat-bubble bg-green-500 text-white p-3 rounded-lg shadow typing-effect">${isStreaming ? "..." : text}</div>`;
             }
-    
+
             chatBox.appendChild(messageDiv);
             chatBox.scrollTop = chatBox.scrollHeight;
             return messageDiv;
         }
-    
+
         function speakResponse(text) {
             const synth = window.speechSynthesis;
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = "en-US";
             synth.speak(utterance);
         }
-    
+
         voiceButton.addEventListener("click", () => {
             loader.classList.remove("hidden");
             recognition.start();
         });
-    
+
         recognition.onresult = async (event) => {
             const spokenText = event.results[0][0].transcript;
             loader.classList.remove("hidden");
-    
+
             addMessage(spokenText, "user");
-    
+
             // Stream response from Flask backend
             try {
                 const response = await fetch("http://127.0.0.1:5000/process_voice", {
@@ -89,21 +194,21 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ query: spokenText }),
                 });
-    
+
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let fullResponse = "";
                 const messageDiv = addMessage("", "assistant", true);
-    
+
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-    
+
                     const chunk = decoder.decode(value, { stream: true });
                     fullResponse += chunk;
-                    messageDiv.innerHTML = `<div class="bg-green-500 text-white p-3 rounded-lg shadow">${fullResponse}</div>`;
+                    messageDiv.innerHTML = `<div class="chat-bubble bg-green-500 text-white p-3 rounded-lg shadow">${fullResponse}</div>`;
                 }
-    
+
                 speakResponse(fullResponse);
             } catch (error) {
                 addMessage("Error communicating with assistant.", "assistant");
@@ -111,12 +216,12 @@
                 loader.classList.add("hidden");
             }
         };
-    
+
         recognition.onerror = () => {
             loader.classList.add("hidden");
             addMessage("Error recognizing speech. Please try again.", "assistant");
         };
     </script>
-    
+
 </body>
 </html>
