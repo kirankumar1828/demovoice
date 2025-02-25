@@ -20,12 +20,12 @@ from database import *
 tf.get_logger().setLevel("ERROR")
 
 # Load trained intent classification model
-model = tf.keras.models.load_model("../voice/modell/intent_model.h5")
+model = tf.keras.models.load_model("intent_model.h5")
 
 # Load tokenizer and label encoder
-with open("../voice/modell/tokenizer.pkl", "rb") as f:
+with open("tokenizer.pkl", "rb") as f:
     tokenizer = pickle.load(f)
-with open("../voice/modell/label_encoder.pkl", "rb") as f:
+with open("label_encoder.pkl", "rb") as f:
     label_encoder = pickle.load(f)
 
 # Initialize Flask app
