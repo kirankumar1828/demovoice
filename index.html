@@ -3,225 +3,117 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Virtual Voice Assistant</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Voice Assistant</title>
     <style>
-        /* Custom fonts */
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500&family=Roboto+Mono:wght@400;500&display=swap');
-
         body {
-            background: radial-gradient(circle at center, #0f172a, #020617);
-            font-family: 'Roboto Mono', monospace;
-            color: #ffffff;
-        }
-
-        .assistant-container {
-            background: rgba(30, 30, 30, 0.8);
-            border: 2px solid #4ade80;
-            box-shadow: 0px 0px 20px #4ade80;
-            backdrop-filter: blur(10px);
-        }
-
-        .chat-bubble {
-            animation: fadeIn 0.3s ease-in-out;
-        }
-
-        .glow {
-            text-shadow: 0 0 10px #4ade80;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Animated Mic Button */
-        .mic-button {
-            animation: pulse 1.5s infinite;
-            background: linear-gradient(145deg, #4ade80, #22c55e);
-            border: none;
-            transition: transform 0.2s ease;
-        }
-
-        .mic-button:hover {
-            transform: scale(1.1);
-        }
-
-        @keyframes pulse {
-            0% { box-shadow: 0 0 10px #4ade80; }
-            50% { box-shadow: 0 0 25px #4ade80; }
-            100% { box-shadow: 0 0 10px #4ade80; }
-        }
-
-        /* Wave animation for AI response */
-        .wave {
+            font-family: Arial, sans-serif;
             display: flex;
-            gap: 3px;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
         }
-
-        .wave span {
-            display: block;
-            width: 5px;
-            height: 10px;
-            background: #4ade80;
-            animation: waveAnim 1.2s infinite ease-in-out;
+        .container {
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
-
-        .wave span:nth-child(2) { animation-delay: 0.2s; }
-        .wave span:nth-child(3) { animation-delay: 0.4s; }
-
-        @keyframes waveAnim {
-            0%, 100% { height: 10px; }
-            50% { height: 20px; }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
         }
-
-        /* 3D Avatar */
-        .avatar {
-            width: 150px;
-            height: 150px;
-            border-radius: 50%;
-            border: 4px solid #4ade80;
-            box-shadow: 0 0 20px #4ade80;
-            animation: float 3s ease-in-out infinite;
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
         }
-
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-
-        /* Typing effect */
-        .typing-effect::after {
-            content: "";
-            display: inline-block;
-            width: 5px;
-            height: 20px;
-            background: #4ade80;
-            margin-left: 5px;
-            animation: blink 0.8s infinite;
-        }
-
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
+        .response {
+            margin-top: 20px;
+            font-size: 18px;
         }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen">
-
-    <div class="assistant-container max-w-md w-full rounded-xl p-6 text-white relative">
-        <!-- 3D Avatar -->
-        <div class="flex justify-center">
-            <img src="https://img.freepik.com/premium-vector/3d-robot-avatar-chatbot-ai-voice-assistant_568837-1066.jpg"
-                 alt="AI Assistant" class="avatar">
-        </div>
-
-        <h2 class="text-center text-xl font-semibold mt-4 glow">Virtual Voice Assistant</h2>
-
-        <!-- Chat Messages -->
-        <div id="chatBox" class="mt-4 space-y-3 h-64 overflow-y-auto p-3 border rounded-md bg-gray-900">
-            <div class="assistant-message flex items-center space-x-2">
-                <div class="chat-bubble bg-green-500 text-white p-3 rounded-lg shadow">
-                    Hello! How can I assist you today?
-                </div>
-            </div>
-        </div>
-
-        <!-- Voice Input Button -->
-        <div class="flex justify-center mt-6">
-            <button id="voiceButton" class="mic-button p-4 rounded-full shadow-lg focus:outline-none">
-                <img src="https://img.icons8.com/ios-glyphs/90/ffffff/microphone.png" class="w-6">
-            </button>
-        </div>
-
-        <!-- Loader (Hidden by default) -->
-        <div id="loader" class="text-center mt-4 hidden">
-            <div class="wave">
-                <span></span><span></span><span></span>
-            </div>
-            <span class="text-gray-400">Listening...</span>
-        </div>
+<body>
+    <div class="container">
+        <h1>Voice Assistant</h1>
+        <button id="start-btn">Start Listening</button>
+        <div class="response" id="response"></div>
     </div>
 
     <script>
-        const voiceButton = document.getElementById("voiceButton");
-        const chatBox = document.getElementById("chatBox");
-        const loader = document.getElementById("loader");
+        const startBtn = document.getElementById("start-btn");
+        const responseDiv = document.getElementById("response");
 
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
+        // Check if the browser supports the Web Speech API
+        if (!("webkitSpeechRecognition" in window)) {
+            alert("Your browser does not support speech recognition. Please use Chrome or Edge.");
+            startBtn.disabled = true;
+        }
+
+        const recognition = new webkitSpeechRecognition();
         recognition.continuous = false;
+        recognition.interimResults = false;
         recognition.lang = "en-US";
 
-        function addMessage(text, sender, isStreaming = false) {
-            const messageDiv = document.createElement("div");
-            messageDiv.classList.add("flex", "items-center", "space-x-2", "mt-2");
-
-            if (sender === "user") {
-                messageDiv.classList.add("justify-end");
-                messageDiv.innerHTML = `<div class="chat-bubble bg-gray-700 text-white p-3 rounded-lg shadow">${text}</div>`;
-            } else {
-                messageDiv.innerHTML = `<div class="chat-bubble bg-green-500 text-white p-3 rounded-lg shadow typing-effect">${isStreaming ? "..." : text}</div>`;
-            }
-
-            chatBox.appendChild(messageDiv);
-            chatBox.scrollTop = chatBox.scrollHeight;
-            return messageDiv;
-        }
-
-        function speakResponse(text) {
-            const synth = window.speechSynthesis;
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = "en-US";
-            synth.speak(utterance);
-        }
-
-        voiceButton.addEventListener("click", () => {
-            loader.classList.remove("hidden");
+        startBtn.addEventListener("click", () => {
             recognition.start();
+            startBtn.disabled = true;
+            responseDiv.textContent = "Listening...";
         });
 
-        recognition.onresult = async (event) => {
-            const spokenText = event.results[0][0].transcript;
-            loader.classList.remove("hidden");
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            responseDiv.textContent = `You said: ${transcript}`;
 
-            addMessage(spokenText, "user");
-
-            // Stream response from Flask backend
-            try {
-                const response = await fetch("http://127.0.0.1:5000/process_voice", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ query: spokenText }),
+            // Send the transcript to the backend
+            fetch("http://localhost:5000/process", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ query: transcript }),
+            })
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error("Network response was not ok");
+                    }
+                    return response.json();
+                })
+                .then((data) => {
+                    responseDiv.textContent = `Assistant: ${data.message}`;
+                    speak(data.message);  // Speak the response
+                })
+                .catch((error) => {
+                    responseDiv.textContent = "Error communicating with the backend.";
+                    console.error("Fetch error:", error);
+                })
+                .finally(() => {
+                    startBtn.disabled = false;
                 });
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let fullResponse = "";
-                const messageDiv = addMessage("", "assistant", true);
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    const chunk = decoder.decode(value, { stream: true });
-                    fullResponse += chunk;
-                    messageDiv.innerHTML = `<div class="chat-bubble bg-green-500 text-white p-3 rounded-lg shadow">${fullResponse}</div>`;
-                }
-
-                speakResponse(fullResponse);
-            } catch (error) {
-                addMessage("Error communicating with assistant.", "assistant");
-            } finally {
-                loader.classList.add("hidden");
-            }
         };
 
-        recognition.onerror = () => {
-            loader.classList.add("hidden");
-            addMessage("Error recognizing speech. Please try again.", "assistant");
+        recognition.onerror = (event) => {
+            responseDiv.textContent = "Error occurred in recognition.";
+            console.error(event.error);
+            startBtn.disabled = false;
         };
+
+        recognition.onend = () => {
+            startBtn.disabled = false;
+        };
+
+        // Function to speak the response
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            window.speechSynthesis.speak(utterance);
+        }
     </script>
-
 </body>
 </html>

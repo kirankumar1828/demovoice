@@ -27,8 +27,6 @@ with open("tokenizer.pkl", "rb") as f:
     tokenizer = pickle.load(f)
 with open("label_encoder.pkl", "rb") as f:
     label_encoder = pickle.load(f)
-with open("max_length.pkl", "rb") as f:
-    max_length = pickle.load(f)  # Ensure consistent input shape
 
 # Initialize speech recognition and text-to-speech
 recognizer = sr.Recognizer()
@@ -48,27 +46,19 @@ def speak(text):
         engine.runAndWait()
     except (KeyboardInterrupt, RuntimeError) as e:
         logger.error(f"Error in text-to-speech: {e}")
-
 def record():
-    """Record and recognize user speech."""
     with sr.Microphone() as mic:
         recognizer.adjust_for_ambient_noise(mic)
         recognizer.dynamic_energy_threshold = True
+        #recognizer.energy_threshold =50000
         print("Listening...")
+        audio = recognizer.listen(mic)
         try:
-            audio = recognizer.listen(mic, timeout=5)
-            text = recognizer.recognize_google(audio, language="en-US").lower()
-            print("USER ->", text)
-            return text
-        except sr.UnknownValueError:
-            logger.warning("Could not understand audio.")
+            text = recognizer.recognize_google(audio, language='en-US').lower()
+        except :
             return None
-        except sr.RequestError as e:
-            logger.error(f"Speech recognition error: {e}")
-            return None
-        except sr.WaitTimeoutError:
-            logger.warning("Listening timed out.")
-            return None
+    print("USER -> " + text)
+    return text
 
 def listen_audio():
     """Continuously listen for audio commands."""
@@ -82,16 +72,15 @@ def listen_audio():
         return
 
 def predict_intent(text):
-    """Predict user intent using the trained deep learning model."""
-    try:
-        sequence = tokenizer.texts_to_sequences([text.lower()])
-        padded_sequence = pad_sequences(sequence, maxlen=max_length, padding="post")
-        prediction = model.predict(padded_sequence)
-        predicted_label = label_encoder.inverse_transform([np.argmax(prediction)])
-        return predicted_label[0]
-    except Exception as e:
-        logger.error(f"Error predicting intent: {e}")
-        return None
+    sequence = tokenizer.texts_to_sequences([text.lower()])
+    print("Tokenized Sequence:", sequence)  # Debugging Line
+    padded_sequence = pad_sequences(sequence, padding="post")  # Dynamic padding
+    print("Padded Sequence Shape:", padded_sequence.shape)  # Debugging Line
+
+    prediction = model.predict(padded_sequence)
+    predicted_label = label_encoder.inverse_transform([np.argmax(prediction)])
+    return predicted_label[0]
+
 
 def handle_email():
     """Handle email-related tasks."""
@@ -113,6 +102,11 @@ def handle_email():
     else:
         speak("There was an error sending the email.")
 
+def get_time():
+    """Provide the current time."""
+    current_time = datetime.datetime.now().strftime('%I:%M %p')
+    speak(f"The time is {current_time}")
+
 def main(query):
     """Process the user's command and execute the corresponding action."""
     if not query:
@@ -120,42 +114,70 @@ def main(query):
         return "No input detected."
 
     intent = predict_intent(query)
-    if not intent:
-        speak("Sorry, I couldn't understand your intent.")
-        return "Intent prediction failed."
 
-    intent_actions = {
-        "greeting": lambda: speak("Hello! How can I assist you today?"),
-        "search_google": lambda: (googleSearch(query), speak("Here are the results I found on Google.")),
-        "search_youtube": lambda: (youtube(query), speak("Here are the results from YouTube.")),
-        "joke": lambda: speak(get_joke() or "Sorry, I couldn't find a joke right now."),
-        "news": lambda: speak(get_new() or "I'm unable to fetch news at the moment."),
-        "ip": lambda: speak(get_ip() or "Couldn't retrieve IP address."),
-        "get_time": lambda: speak(f"The time is {datetime.datetime.now().strftime('%I:%M %p')}"),
-        "get_date": lambda: speak(f"Today's date is {datetime.datetime.now().strftime('%d %B, %Y')}"),
-        "get_datetime": lambda: speak(f"The current date and time is {datetime.datetime.now().strftime('%A, %d %B %Y, %I:%M %p')}"),
-        "weather": lambda: speak(f"The weather is: {get_weather()}"),
-        "open_website": lambda: speak("Opening the website.") if open_specified_website(query) else speak("Unable to open website."),
-        "select_text": lambda: (sys_ops.select(), speak("The text has been selected.")),
-        "copy_text": lambda: (sys_ops.copy(), speak("The text has been copied.")),
-        "paste_text": lambda: (sys_ops.paste(), speak("The text has been pasted.")),
-        "get_data": lambda: get_data() if "history" in query else speak("I couldn't fetch the requested data."),
-        "exit": lambda: (speak("Thank you! Goodbye."), exit(0)),
-        "email": handle_email,
-    }
-
-    if intent in intent_actions:
-        intent_actions[intent]()
-        return "Intent executed successfully."
-
-    # Default response if intent is not matched
-    answer = tell_me_about(query)
-    if answer:
-        speak(answer)
-        return answer
+    # Mapping intents to functions
+    if intent == "get_time":
+        get_time()
+    elif intent == "greeting":
+        speak("Hello! How can I assist you today?")
+    elif intent == "search_google":
+        googleSearch(query)
+        speak("Here are the results I found on Google.")
+    elif intent == "search_youtube":
+        youtube(query)
+        speak("Here are the results from YouTube.")
+    elif intent == "joke":
+        joke = get_joke()
+        speak(joke if joke else "Sorry, I couldn't find a joke right now.")
+    elif intent == "news":
+        news = get_new()
+        speak(news if news else "I'm unable to fetch news at the moment.")
+    elif intent == "ip":
+        ip_address = get_ip()
+        speak(ip_address if ip_address else "Couldn't retrieve IP address.")
+    elif intent == "get_date":
+        current_date = datetime.datetime.now().strftime('%d %B, %Y')
+        speak(f"Today's date is {current_date}")
+    elif intent == "get_datetime":
+        date_time = datetime.datetime.now().strftime('%A, %d %B %Y, %I:%M %p')
+        speak(f"The current date and time is {date_time}")
+    elif intent == "weather":
+        weather_info = get_weather()
+        speak(f"The weather is: {weather_info}")
+    elif intent == "open_website":
+        if open_specified_website(query):
+            speak("Opening the website.")
+        else:
+            speak("Unable to open website.")
+    elif intent == "select_text":
+        sys_ops.select()
+        speak("The text has been selected.")
+    elif intent == "copy_text":
+        sys_ops.copy()
+        speak("The text has been copied.")
+    elif intent == "paste_text":
+        sys_ops.paste()
+        speak("The text has been pasted.")
+    elif intent == "get_data":
+        if "history" in query:
+            get_data()
+        else:
+            speak("I couldn't fetch the requested data.")
+    elif intent == "exit":
+        speak("Thank you! Goodbye.")
+        exit(0)
+    elif intent == "email":
+        handle_email()
     else:
-        speak("Sorry, I am not able to answer your query.")
-        return "No answer found."
+        answer = tell_me_about(query)
+        if answer:
+            speak(answer)
+            return answer
+        else:
+            speak("Sorry, I am not able to answer your query.")
+            return "No answer found."
+
+    return "Intent executed successfully."
 
 if __name__ == "__main__":
     listen_audio()
